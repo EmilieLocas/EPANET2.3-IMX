@@ -13,6 +13,7 @@ Last Updated: 02/14/2025
 
 #include <stdlib.h>
 #include <stdio.h>
+#define _USE_MATH_DEFINES
 #include <math.h>
 
 #include "mempool.h"
@@ -22,6 +23,7 @@ Last Updated: 02/14/2025
 #define LINKVOL(k) (0.785398 * net->Link[(k)].Len * SQR(net->Link[(k)].Diam))
 
 // Macro to get link flow compatible with flow saved to hydraulics file
+// Structure hydraul
 #define LINKFLOW(k) ((hyd->LinkStatus[k] <= CLOSED) ? 0.0 : hyd->LinkFlow[k])
 
 // Exported functions
@@ -36,6 +38,16 @@ extern double  findsourcequal(Project *, int, double, long);
 extern void    reactpipes(Project *, long);
 extern void    reacttanks(Project *, long);
 extern double  mixtank(Project *, int, double, double, double);
+/* BAM start */
+extern int     findcrossjuncs(Project *pr);
+extern double getlinkangle(Project *pr, int lnk, int node);
+/* BAM end */
+/* IMX start */
+extern double  imxadjoutconc(Project *pr, Cjunc *cj);
+extern double  imxoppoutconc(Project *pr, Cjunc *cj);
+extern void    assigncontamination(Project *pr);
+extern void    assigncontaminationnode(Project *pr, int n);
+/* IMX end */
 
 // Local functions
 static void    evalnodeinflow(Project *, int, long, double *, double *);
@@ -47,14 +59,6 @@ static int     selectnonstacknode(Project *, int, int *);
 
 
 void transport(Project *pr, long tstep)
-/*
-**--------------------------------------------------------------
-**   Input:   tstep = length of current time step
-**   Output:  none
-**   Purpose: transports constituent mass through the pipe network
-**            under a period of constant hydraulic conditions.
-**--------------------------------------------------------------
-*/
 {
     Network *net = &pr->network;
     Hydraul *hyd = &pr->hydraul;
@@ -62,68 +66,100 @@ void transport(Project *pr, long tstep)
 
     int j, k, m, n;
     double volin, massin, volout, nodequal;
-    Padjlist  alink;
+    Padjlist alink;
 
-    // React contents of each pipe and tank
     if (qual->Reactflag)
     {
         reactpipes(pr, tstep);
         reacttanks(pr, tstep);
     }
 
-    // Analyze each node in topological order
+    if (findcrossjuncs(pr) > 0) return;
+
     for (j = 1; j <= net->Nnodes; j++)
     {
-        // ... index of node to be processed
         n = qual->SortedNodes[j];
-
-        // ... zero out mass & flow volumes for this node
-        volin = 0.0;
+        volin  = 0.0;
         massin = 0.0;
         volout = 0.0;
 
-        // ... examine each link with flow into the node
         for (alink = net->Adjlist[n]; alink != NULL; alink = alink->next)
         {
-            // ... k is index of next link incident on node n
             k = alink->link;
-
-            // ... link has flow into node - add it to node's inflow
-            //     (m is index of link's downstream node)
-            m = net->Link[k].N2;
-            if (qual->FlowDir[k] < 0) m = net->Link[k].N1;
+            m = (qual->FlowDir[k] < 0) ? net->Link[k].N1 : net->Link[k].N2;
             if (m == n)
             {
                 evalnodeinflow(pr, k, tstep, &volin, &massin);
             }
-
-            // ... link has flow out of node - add it to node's outflow
             else volout += fabs(LINKFLOW(k));
         }
 
-        // ... if node is a junction, add on any external outflow (e.g., demands)
         if (net->Node[n].Type == JUNCTION)
-        {
             volout += MAX(0.0, hyd->NodeDemand[n]);
-        }
-
-        // ... convert from outflow rate to volume
         volout *= tstep;
 
-        // ... find the concentration of flow leaving the node
+        /* IMX : capturer les concentrations des liens entrants APRES evalnodeinflow,
+           en lisant NodeQual du nœud amont (déjà calculé en ordre topologique) */
+        if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
+        {
+            Cjunc *cj = &qual->Crossjuncs[n];
+            int inlinks[2] = { cj->contaminlink, cj->purelink };
+            double concs[2];
+
+            for (int ii = 0; ii < 2; ii++)
+            {
+                k = inlinks[ii];
+                /* LastSeg contient la concentration IMX poussée par evalnodeoutflow
+                du nœud amont — c'est la valeur correcte après mélange incomplet. */
+                if (qual->LastSeg[k] != NULL)
+                    concs[ii] = qual->LastSeg[k]->c;
+                else
+                {
+                    int upnode = (qual->FlowDir[k] >= 0)
+                                ? net->Link[k].N1
+                                : net->Link[k].N2;
+                    concs[ii] = qual->NodeQual[upnode];
+                }
+            }
+            cj->contaminconc = concs[0];
+            cj->pureconc     = concs[1];
+
+            assigncontaminationnode(pr, n);
+        }
+
         nodequal = findnodequal(pr, n, volin, massin, volout, tstep);
 
-        // ... examine each link with flow out of the node
         for (alink = net->Adjlist[n]; alink != NULL; alink = alink->next)
         {
-            // ... link k incident on node n has upstream node m equal to n
             k = alink->link;
-            m = net->Link[k].N1;
-            if (qual->FlowDir[k] < 0) m = net->Link[k].N2;
+            m = (qual->FlowDir[k] < 0) ? net->Link[k].N2 : net->Link[k].N1;
             if (m == n)
             {
-                // ... send flow at new node concen. into link
-                evalnodeoutflow(pr, k, nodequal, tstep);
+                double outconc = nodequal;
+
+                if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
+                {
+                    Cjunc *cj = &qual->Crossjuncs[n];
+                    if (k == cj->adjoutlink)
+                        outconc = imxadjoutconc(pr, cj);
+                    else if (k == cj->oppoutlink)
+                        outconc = imxoppoutconc(pr, cj);
+                }
+                if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
+                {
+                    Cjunc *cj = &qual->Crossjuncs[n];
+                    double ucf = pr->Ucf[QUALITY];
+                    printf("Cross-junc n=%d | contaminlink=%d purelink=%d | contaminconc=%.4f pureconc=%.4f mg/L\n",
+                        n, cj->contaminlink, cj->purelink,
+                        cj->contaminconc / ucf, cj->pureconc / ucf);
+                    printf("  adjoutlink=%d oppoutlink=%d\n", cj->adjoutlink, cj->oppoutlink);
+                    printf("  IMX_adj=%.4f IMX_opp=%.4f mg/L\n",
+                        imxadjoutconc(pr, cj) / ucf, imxoppoutconc(pr, cj) / ucf);
+                    printf("  NodeQual[upnode_contam]=%.4f NodeQual[upnode_pur]=%.4f mg/L\n",
+                        qual->NodeQual[net->Link[cj->contaminlink].N1] / ucf,
+                        qual->NodeQual[net->Link[cj->purelink].N1] / ucf);
+                }
+                evalnodeoutflow(pr, k, outconc, tstep);
             }
         }
         updatemassbalance(pr, n, massin, volout, tstep);
@@ -132,15 +168,23 @@ void transport(Project *pr, long tstep)
 
 void  evalnodeinflow(Project *pr, int k, long tstep, double *volin,
                      double *massin)
+// Cumule masse et volume arrivant au noeud/jonction
 /*
 **--------------------------------------------------------------
-**   Input:   k = link index
-**            tstep = quality routing time step
-**   Output:  volin = flow volume entering a node
-**            massin = constituent mass entering a node
-**   Purpose: adds the contribution of a link's outflow volume
+**   Input:   k = link index -> unique, integer-based identifier (from 1) 
+**   assigned to each link (pipe, pump, or valve)
+**            tstep = quality routing time step (time interval where software
+**                     computes/updates results)
+**   Output:  volin = flow volume entering a node/junction
+**            Flow volume : volume of a fluid that passes through a given surface 
+**            per unit of time ==>  Flowrate in article (l/s) **Careful : units
+**            massin = constituent mass entering a node/junction
+**            Dimensionless concentration ? ==> *Concentration = massin / volin ?
+**            **Pressure does not have a significant impact on mixing phenomenon
+**            **Output ==> dimensionless concentration or volin and massin ?
+**   Purpose: adds the contribution of a link's (pipe's) outflow volume
 **            and constituent mass to the total inflow into its
-**            downstream node over a time step.
+**            downstream node/junction over a time step.
 **--------------------------------------------------------------
 */
 {
@@ -192,54 +236,40 @@ void  evalnodeinflow(Project *pr, int k, long tstep, double *volin,
 }
 
 
-double  findnodequal(Project *pr, int n, double volin,
-                     double massin, double volout, long tstep)
-/*
-**--------------------------------------------------------------
-**   Input:   n = node index
-**            volin = flow volume entering node
-**            massin = mass entering node
-**            volout = flow volume leaving node
-**            tstep = length of current time step
-**   Output:  returns water quality in a node's outflow
-**   Purpose: computes a node's new quality from its inflow
-**            volume and mass, including any source contribution.
-**--------------------------------------------------------------
-*/
+double findnodequal(Project *pr, int n, double volin,
+                    double massin, double volout, long tstep)
 {
     Network *net = &pr->network;
     Hydraul *hyd = &pr->hydraul;
     Quality *qual = &pr->quality;
 
-    // Node is a junction - update its water quality
+    // Junction : mélange complet
     if (net->Node[n].Type == JUNCTION)
     {
-        // ... dilute inflow with any external negative demand
         volin -= MIN(0.0, hyd->NodeDemand[n]) * tstep;
-
-        // ... new concen. is mass inflow / volume inflow
         if (volin > 0.0) qual->NodeQual[n] = massin / volin;
-
-        // ... if no inflow adjust quality for reaction in connecting pipes
         else if (qual->Reactflag) qual->NodeQual[n] = noflowqual(pr, n);
+
+        /* IMX : cross-junction — NodeQual[n] garde le mélange complet
+           (bilan de masse), evalnodeoutflow appliquera IMX par lien */
+        if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
+            return qual->NodeQual[n];
     }
 
-    // Node is a tank - use its mixing model to update its quality
+    // Tank
     else if (net->Node[n].Type == TANK)
     {
         qual->NodeQual[n] = mixtank(pr, n, volin, massin, volout);
     }
 
-    // Add any external quality source onto node's concen.
+    // Initialiser SourceQual avant toute source externe
     qual->SourceQual = 0.0;
 
-    // For source tracing analysis find tracer added at source node
+    // Traçage
     if (qual->Qualflag == TRACE)
     {
         if (n == qual->TraceNode)
         {
-            // ... quality added to network is difference between tracer
-            //     concentration (100 mg/L) and current node quality
             if (net->Node[n].Type == RESERVOIR) qual->SourceQual = 100.0;
             else qual->SourceQual = MAX(100.0 - qual->NodeQual[n], 0.0);
             qual->NodeQual[n] = 100.0;
@@ -247,27 +277,23 @@ double  findnodequal(Project *pr, int n, double volin,
         return qual->NodeQual[n];
     }
 
-    // Find quality contributed by any external chemical source
-    else qual->SourceQual = findsourcequal(pr, n, volout, tstep);
+    // Source chimique externe
+    qual->SourceQual = findsourcequal(pr, n, volout, tstep);
     if (qual->SourceQual == 0.0) return qual->NodeQual[n];
 
-    // Combine source quality with node quality
     switch (net->Node[n].Type)
     {
-    case JUNCTION:
-        qual->NodeQual[n] += qual->SourceQual;
-        return qual->NodeQual[n];
-
-    case TANK:
-        return qual->NodeQual[n] + qual->SourceQual;
-
-    case RESERVOIR:
-        qual->NodeQual[n] = qual->SourceQual;
-        return qual->SourceQual;
+        case JUNCTION:
+            qual->NodeQual[n] += qual->SourceQual;
+            return qual->NodeQual[n];
+        case TANK:
+            return qual->NodeQual[n] + qual->SourceQual;
+        case RESERVOIR:
+            qual->NodeQual[n] = qual->SourceQual;
+            return qual->SourceQual;
     }
     return qual->NodeQual[n];
 }
-
 
 double  noflowqual(Project *pr, int n)
 /*
@@ -321,6 +347,7 @@ double  noflowqual(Project *pr, int n)
 
 
 void evalnodeoutflow(Project *pr, int k, double c, long tstep)
+// Renvoie la concentration calculée dans les tuyaux sortant (output)
 /*
 **--------------------------------------------------------------
 **   Input:   k = link index
@@ -694,3 +721,5 @@ void addseg(Project *pr, int k, double v, double c)
     qual->LastSeg[k] = seg;
     qual->MassBalance.segCount++;                                     
 }
+
+

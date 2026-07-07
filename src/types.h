@@ -405,6 +405,24 @@ typedef struct             // Node Object
   char     *Tag;           // optional category tag                                                   
 } Snode;
 
+/* BAM start */
+typedef struct
+{
+  int nodeindex; // Index of cross-junction in Node array
+  int iscrossjunc; // Whether node is a cross-junction
+
+  /* IMX start*/
+  int contaminlink; // Contaminated inlet link index
+  int purelink; // Pure inlet link index
+  int adjoutlink; // Adjacent outlet link index (to contaminated inlet)
+  int oppoutlink; // Opposite outlet link index (to contaminated inlet)
+
+  double contaminconc; // Concentration of contaminated inlet flow
+  double pureconc; // Concentration of pure inlet flow
+  /* IMX end*/
+} Cjunc;
+/* BAM end */
+
 typedef struct             // Link Object
 {
   char     ID[MAXID+1];    // link ID
@@ -427,7 +445,7 @@ typedef struct             // Link Object
   int      Rpt;            // reporting flag
   int      ResultIndex;    // saved result index
   char     *Comment;       // link comment
-  char     *Tag;           // optional category tag                                                   
+  char     *Tag;           // optional category tag                                                 
 } Slink;
 
 typedef struct             // Tank Object
@@ -860,7 +878,13 @@ typedef struct {
 
   SmassBalance
     MassBalance;           // Mass balance components
-
+  
+  /* BAM start */
+  int    
+    Ncrossjuncs;      // Count of cross junctions OK for bulk-mixing
+  Cjunc  
+    *Crossjuncs;      // Array of Cjunc for each junction
+  /* BAM end */
 } Quality;
 
 // Pipe Network Wrapper

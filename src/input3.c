@@ -79,7 +79,7 @@ int juncdata(Project *pr)
     int n;                      // number of tokens
     int njuncs;                 // number of network junction nodes
     double el = 0.0,            // elevation
-           d = 0.0,             // base demand
+           d = 0.0,             // base demand 
            x;
     Snode *node;
     int errcode = 0;

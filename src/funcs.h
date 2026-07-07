@@ -186,6 +186,14 @@ int     nextqual(Project *, long *);
 int     stepqual(Project *, long *);
 int     closequal(Project *);
 double  avgqual(Project *, int);
+/* BAM start */
+int     findcrossjuncs(Project *); // Finds all cross junctions
+/* BAM end */
+/* IMX start */
+double  imxadjoutconc(Project *, Cjunc *); // Calculates fast outlet conc
+double  imxoppoutconc(Project *, Cjunc *); // Calculates slow outlet conc
+void    assigncontamination(Project *pr);
+/* IMX end*/
 
 // ------- OUTPUT.C ---------------------
 

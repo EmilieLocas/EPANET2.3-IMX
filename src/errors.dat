@@ -58,6 +58,8 @@ DAT(252,"invalid ID name")
 DAT(253,"nonexistent demand category")
 DAT(254,"node with no coordinates")
 DAT(255,"invalid link vertex")
+// BAM update
+DAT(256,"coordinates not specified for all nodes")
 DAT(257,"nonexistent rule")
 DAT(258,"nonexistent rule clause")
 DAT(259,"attempt to delete a node that still has links connected to it")
