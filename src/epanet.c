@@ -183,10 +183,8 @@ int DLLEXPORT EN_open(EN_Project p, const char *inpFile, const char *rptFile,
  **----------------------------------------------------------------
  */
  {
-    FILE *dbgpath = fopen("C:\\Temp\\epanet_path.log", "a");
-    if (dbgpath) { fprintf(dbgpath, "EN_open inpFile=%s\n", inpFile); fflush(dbgpath); fclose(dbgpath); }
-   writewin(p->viewprog, FMT100);
-   return openproject(p, inpFile, rptFile, outFile, FALSE);
+    writewin(p->viewprog, FMT100);
+    return openproject(p, inpFile, rptFile, outFile, FALSE);
  }     
 
 int DLLEXPORT EN_openX(EN_Project p, const char *inpFile,
@@ -2968,8 +2966,6 @@ int DLLEXPORT EN_setcoord(EN_Project p, int index, double x, double y)
 {
     Network *net = &p->network;
     Snode *node;
-    FILE *dbgsc = fopen("C:\\Temp\\epanet_setcoord.log", "a");
-    if (dbgsc) { fprintf(dbgsc, "EN_setcoord appele: index=%d x=%f y=%f\n", index, x, y); fflush(dbgsc); fclose(dbgsc); }
     
     if (!p->Openflag) return 102;
     if (index < 1 || index > p->network.Nnodes) return 203;

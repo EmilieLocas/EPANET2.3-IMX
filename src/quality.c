@@ -1,7 +1,7 @@
 /*
 ******************************************************************************
 Project:        OWA EPANET
-            Modified for incomplete mixing (Reza Yousefian's model)
+            Modified for incomplete mixing
 Version:        2.3
 Module:         quality.c
 Description:    implements EPANET's water quality engine
@@ -37,7 +37,6 @@ double  findsourcequal(Project *, int, double, long);
 int     findcrossjuncs(Project *pr);
 double  imxadjoutconc(Project *pr, Cjunc *cj);
 double  imxoppoutconc(Project *pr, Cjunc *cj);
-void    assigncontamination(Project *pr);
 double  getlinkangle(Project *pr, int lnk, int node);
 void    assigncontaminationnode(Project *pr, int n);
 /* IMX end - derived from BAM */
@@ -729,14 +728,6 @@ int findcrossjuncs(Project *pr)
     int opplink1, opplink2;
     int prevNcross;
 
-    FILE *dbgenter = fopen("C:\\Temp\\epanet_enter.log", "a");
-    if (dbgenter) 
-    { 
-        fprintf(dbgenter, "findcrossjuncs() entree, Njuncs=%d Nlinks=%d\n", net->Njuncs, net->Nlinks); 
-        fflush(dbgenter); 
-        fclose(dbgenter); 
-    }
-
     prevNcross = qual->Ncrossjuncs;
     qual->Ncrossjuncs = 0;
 
@@ -744,19 +735,9 @@ int findcrossjuncs(Project *pr)
     {
         qual->Crossjuncs[j].iscrossjunc = 0;
 
-        /* IMX : si le noeud n'a pas de coordonnees valides... */
-        if (net->Node[j].X == MISSING || net->Node[j].Y == MISSING)
-        {
-            FILE *dbgskip = fopen("C:\\Temp\\epanet_enter.log", "a");
-            if (dbgskip)
-            {
-                fprintf(dbgskip, "  j=%d SKIP (X=%f Y=%f MISSING=%f)\n",
-                    j, net->Node[j].X, net->Node[j].Y, MISSING);
-                fflush(dbgskip);
-                fclose(dbgskip);
-            }
-            continue;
-        }
+        /* IMX : si le noeud n'a pas de coordonnees valides, il ne peut pas
+           etre evalue comme cross-junction */
+        if (net->Node[j].X == MISSING || net->Node[j].Y == MISSING) continue;
 
         Nupnode = 0;
         Ndownnode = 0;
@@ -791,31 +772,9 @@ int findcrossjuncs(Project *pr)
             }
         }
 
-        // DEBUG : log l'etat de detection pour chaque jonction
-        {
-            FILE *dbg3 = fopen("C:\\Temp\\epanet_detect.log", "a");
-            if (dbg3)
-            {
-                fprintf(dbg3, "j=%d Nupnode=%d Ndownnode=%d\n", j, Nupnode, Ndownnode);
-                fflush(dbg3);
-                fclose(dbg3);
-            }
-        }
-
         if (Nupnode == 2 && Ndownnode == 2)
         {
             opplink1 = nonadjlink(pr, inlink1, inlink2, outlink1, outlink2, j);
-
-            // DEBUG : log opplink1 vs inlink2
-            {
-                FILE *dbg4 = fopen("C:\\Temp\\epanet_detect.log", "a");
-                if (dbg4)
-                {
-                    fprintf(dbg4, "  j=%d opplink1=%d inlink2=%d (egal? %s)\n",
-                        j, opplink1, inlink2, (opplink1 == inlink2) ? "OUI-BLOQUE" : "non");
-                    fclose(dbg4);
-                }
-            }
 
             if (opplink1 != inlink2)
             {
@@ -827,17 +786,6 @@ int findcrossjuncs(Project *pr)
                 if (crossAngle > M_PI) crossAngle = 2.0 * M_PI - crossAngle;
 
                 double TOL = 5.0 * M_PI / 180.0;
-
-                // DEBUG : log l'angle calcule vs tolerance
-                {
-                    FILE *dbg5 = fopen("C:\\Temp\\epanet_detect.log", "a");
-                    if (dbg5)
-                    {
-                        fprintf(dbg5, "  j=%d crossAngle=%.4f rad (%.2f deg) cible=90deg tol=%.2fdeg\n",
-                            j, crossAngle, crossAngle * 180.0 / M_PI, TOL * 180.0 / M_PI);
-                        fclose(dbg5);
-                    }
-                }
 
                 if (fabs(crossAngle - M_PI / 2.0) > TOL) continue;
 
@@ -864,17 +812,6 @@ int findcrossjuncs(Project *pr)
                 qual->Crossjuncs[j].oppoutlink   = opp_out;
                 qual->Crossjuncs[j].adjoutlink   = adj_out;
             }
-        }
-    }
-    if (qual->Ncrossjuncs != prevNcross)
-    {
-        printf("Nombre de cross-junctions detectees: %d\n", qual->Ncrossjuncs);
-        for (j = 1; j <= net->Njuncs; j++)
-        {
-            if (!qual->Crossjuncs[j].iscrossjunc) continue;
-            printf("  Noeud %d | contaminlink=%d purelink=%d | adjoutlink=%d oppoutlink=%d\n",
-                j, qual->Crossjuncs[j].contaminlink, qual->Crossjuncs[j].purelink,
-                qual->Crossjuncs[j].adjoutlink, qual->Crossjuncs[j].oppoutlink);
         }
     }
     return 0;

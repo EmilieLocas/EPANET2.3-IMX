@@ -1,7 +1,7 @@
 /*
 ******************************************************************************
 Project:        OWA EPANET
-            Modified for incomplete mixing (Reza Yousefian's model)
+            Modified for incomplete mixing
 Version:        2.3
 Module:         qualroute.c
 Description:    implements EPANET's water quality engine
@@ -49,7 +49,6 @@ extern int     findcrossjuncs(Project *pr);
 extern double getlinkangle(Project *pr, int lnk, int node);
 extern double  imxadjoutconc(Project *pr, Cjunc *cj);
 extern double  imxoppoutconc(Project *pr, Cjunc *cj);
-extern void    assigncontamination(Project *pr);
 extern void    assigncontaminationnode(Project *pr, int n);
 /* IMX end - derived from BAM */
 
@@ -81,9 +80,6 @@ void transport(Project *pr, long tstep)
     double volin, massin, volout, nodequal;
     Padjlist alink;
 
-    FILE *dbgtest = fopen("C:\\Temp\\epanet_alive.log", "a");
-    if (dbgtest) { fprintf(dbgtest, "transport() appelee, tstep=%ld\n", tstep); fclose(dbgtest); }
-
     // React contents of each pipe and tank
     if (qual->Reactflag)
     {
@@ -92,16 +88,7 @@ void transport(Project *pr, long tstep)
     }
 
     cj_err = findcrossjuncs(pr);
-    if (cj_err > 0)
-    {
-        FILE *dbg = fopen("C:\\Temp\\epanet_debug.log", "a");
-        if (dbg)
-        {
-            fprintf(dbg, "findcrossjuncs err=%d\n", cj_err);
-            fclose(dbg);
-        }
-        return;
-    }
+    if (cj_err > 0) return;
 
     // Analyze each node in topological order
     for (j = 1; j <= net->Nnodes; j++)
@@ -168,6 +155,7 @@ void transport(Project *pr, long tstep)
 
             assigncontaminationnode(pr, n);
         }
+        /* IMX end - derived from BAM */
 
         // ... find the concentration of flow leaving the node
         nodequal = findnodequal(pr, n, volin, massin, volout, tstep);
@@ -181,6 +169,7 @@ void transport(Project *pr, long tstep)
             {
                 double outconc = nodequal;
 
+                /* IMX start - derived from BAM */
                 if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
                 {
                     Cjunc *cj = &qual->Crossjuncs[n];
@@ -189,27 +178,8 @@ void transport(Project *pr, long tstep)
                     else if (k == cj->oppoutlink)
                         outconc = imxoppoutconc(pr, cj);
                 }
-                if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
-                {
-                    FILE *dbg2 = fopen("C:\\Temp\\epanet_crossjunc.log", "a");
-                    if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
-                    {
-                        Cjunc *cj = &qual->Crossjuncs[n];
-                        double ucf = pr->Ucf[QUALITY];
-                        if (dbg2)
-                        {
-                            fprintf(dbg2, "n=%d ISCROSS=1 contaminlink=%d purelink=%d adjout=%d oppout=%d contaminconc=%.4f pureconc=%.4f IMXadj=%.4f IMXopp=%.4f\n",
-                                n, cj->contaminlink, cj->purelink, cj->adjoutlink, cj->oppoutlink,
-                                cj->contaminconc / ucf, cj->pureconc / ucf,
-                                imxadjoutconc(pr, cj) / ucf, imxoppoutconc(pr, cj) / ucf);
-                        }
-                    }
-                    else if (n == 1)  // adapte "1" si J1 n'a pas l'index 1 dans ton réseau
-                    {
-                        if (dbg2) fprintf(dbg2, "n=%d ISCROSS=0 (pas detecte comme cross-junction)\n", n);
-                    }
-                    if (dbg2) fclose(dbg2);
-                }
+                /* IMX end - derived from BAM */
+
                 // ... send flow at new node concen. into link
                 evalnodeoutflow(pr, k, outconc, tstep);
             }
@@ -773,5 +743,3 @@ void addseg(Project *pr, int k, double v, double c)
     qual->LastSeg[k] = seg;
     qual->MassBalance.segCount++;                                     
 }
-
-
