@@ -830,6 +830,8 @@ int coordata(Project *pr)
     node = &net->Node[j];
     node->X = x;
     node->Y = y;
+    FILE *dbgcoord = fopen("C:\\Temp\\epanet_coordata.log", "a");
+    if (dbgcoord) { fprintf(dbgcoord, "coordata: node j=%d x=%f y=%f\n", j, x, y); fflush(dbgcoord); fclose(dbgcoord); }
     return 0;
 }
 

@@ -1,0 +1,3 @@
+C:\msys64\mingw32\bin\cmake.exe -E rm -f CMakeFiles\runepanet.dir/objects.a
+C:\msys64\mingw32\bin\ar.exe qc CMakeFiles\runepanet.dir/objects.a @CMakeFiles\runepanet.dir\objects1.rsp
+C:\msys64\mingw32\bin\cc.exe -static -static-libgcc -Depanet2_EXPORTS=1 -Wl,--whole-archive CMakeFiles\runepanet.dir/objects.a -Wl,--no-whole-archive -o ..\bin\runepanet.exe -Wl,--out-implib,..\lib\librunepanet.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\runepanet.dir\linkLibs.rsp

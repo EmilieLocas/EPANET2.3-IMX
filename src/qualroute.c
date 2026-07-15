@@ -1,19 +1,26 @@
 /*
 ******************************************************************************
-Project:      OWA EPANET
-Version:      2.3
-Module:       qualroute.c
-Description:  computes water quality transport over a single time step
-Authors:      see AUTHORS
-Copyright:    see AUTHORS
-License:      see LICENSE
-Last Updated: 02/14/2025
+Project:        OWA EPANET
+            Modified for incomplete mixing (Reza Yousefian's model)
+Version:        2.3
+Module:         qualroute.c
+Description:    implements EPANET's water quality engine
+Authors:        see AUTHORS
+            EPANET-BAM's authors : Siri Sahib Khalsa & Sandia National Laboratories
+Copyright:      see AUTHORS
+            Copyright 2007 Sandia Corporation. Under the terms of Contract 
+            DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government 
+            retains certain rights in this software.
+License:        see LICENSE
+Last Updated:   15/07/2026
 ******************************************************************************
 */
 
 #include <stdlib.h>
 #include <stdio.h>
+/* IMX start */
 #define _USE_MATH_DEFINES
+/* IMX end */
 #include <math.h>
 
 #include "mempool.h"
@@ -23,7 +30,6 @@ Last Updated: 02/14/2025
 #define LINKVOL(k) (0.785398 * net->Link[(k)].Len * SQR(net->Link[(k)].Diam))
 
 // Macro to get link flow compatible with flow saved to hydraulics file
-// Structure hydraul
 #define LINKFLOW(k) ((hyd->LinkStatus[k] <= CLOSED) ? 0.0 : hyd->LinkFlow[k])
 
 // Exported functions
@@ -38,16 +44,14 @@ extern double  findsourcequal(Project *, int, double, long);
 extern void    reactpipes(Project *, long);
 extern void    reacttanks(Project *, long);
 extern double  mixtank(Project *, int, double, double, double);
-/* BAM start */
+/* IMX start - derived from BAM */
 extern int     findcrossjuncs(Project *pr);
 extern double getlinkangle(Project *pr, int lnk, int node);
-/* BAM end */
-/* IMX start */
 extern double  imxadjoutconc(Project *pr, Cjunc *cj);
 extern double  imxoppoutconc(Project *pr, Cjunc *cj);
 extern void    assigncontamination(Project *pr);
 extern void    assigncontaminationnode(Project *pr, int n);
-/* IMX end */
+/* IMX end - derived from BAM */
 
 // Local functions
 static void    evalnodeinflow(Project *, int, long, double *, double *);
@@ -59,47 +63,85 @@ static int     selectnonstacknode(Project *, int, int *);
 
 
 void transport(Project *pr, long tstep)
+/*
+**--------------------------------------------------------------
+**   Input:   tstep = length of current time step
+**   Output:  none
+**   Purpose: transports constituent mass through the pipe network
+**            under a period of constant hydraulic conditions.
+**--------------------------------------------------------------
+*/
 {
     Network *net = &pr->network;
     Hydraul *hyd = &pr->hydraul;
     Quality *qual = &pr->quality;
 
     int j, k, m, n;
+    int cj_err;
     double volin, massin, volout, nodequal;
     Padjlist alink;
 
+    FILE *dbgtest = fopen("C:\\Temp\\epanet_alive.log", "a");
+    if (dbgtest) { fprintf(dbgtest, "transport() appelee, tstep=%ld\n", tstep); fclose(dbgtest); }
+
+    // React contents of each pipe and tank
     if (qual->Reactflag)
     {
         reactpipes(pr, tstep);
         reacttanks(pr, tstep);
     }
 
-    if (findcrossjuncs(pr) > 0) return;
+    cj_err = findcrossjuncs(pr);
+    if (cj_err > 0)
+    {
+        FILE *dbg = fopen("C:\\Temp\\epanet_debug.log", "a");
+        if (dbg)
+        {
+            fprintf(dbg, "findcrossjuncs err=%d\n", cj_err);
+            fclose(dbg);
+        }
+        return;
+    }
 
+    // Analyze each node in topological order
     for (j = 1; j <= net->Nnodes; j++)
     {
+        // ... index of node to be processed
         n = qual->SortedNodes[j];
+
+        // ... zero out mass & flow volumes for this node
         volin  = 0.0;
         massin = 0.0;
         volout = 0.0;
 
+        // ... examine each link with flow into the node
         for (alink = net->Adjlist[n]; alink != NULL; alink = alink->next)
         {
+            // ... k is index of next link incident on node n
             k = alink->link;
+
+            // ... link has flow into node - add it to node's inflow
+            //     (m is index of link's downstream node)
             m = (qual->FlowDir[k] < 0) ? net->Link[k].N1 : net->Link[k].N2;
             if (m == n)
             {
                 evalnodeinflow(pr, k, tstep, &volin, &massin);
             }
+
+            // ... link has flow out of node - add it to node's outflow
             else volout += fabs(LINKFLOW(k));
         }
 
+        // ... if node is a junction, add on any external outflow (e.g., demands)
         if (net->Node[n].Type == JUNCTION)
+        {
             volout += MAX(0.0, hyd->NodeDemand[n]);
+        }
+
+        // ... convert from outflow rate to volume
         volout *= tstep;
 
-        /* IMX : capturer les concentrations des liens entrants APRES evalnodeinflow,
-           en lisant NodeQual du nœud amont (déjà calculé en ordre topologique) */
+        /* IMX start - derived from BAM */
         if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
         {
             Cjunc *cj = &qual->Crossjuncs[n];
@@ -127,10 +169,12 @@ void transport(Project *pr, long tstep)
             assigncontaminationnode(pr, n);
         }
 
+        // ... find the concentration of flow leaving the node
         nodequal = findnodequal(pr, n, volin, massin, volout, tstep);
 
         for (alink = net->Adjlist[n]; alink != NULL; alink = alink->next)
         {
+            // ... link k incident on node n has upstream node m equal to n
             k = alink->link;
             m = (qual->FlowDir[k] < 0) ? net->Link[k].N2 : net->Link[k].N1;
             if (m == n)
@@ -147,18 +191,26 @@ void transport(Project *pr, long tstep)
                 }
                 if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
                 {
-                    Cjunc *cj = &qual->Crossjuncs[n];
-                    double ucf = pr->Ucf[QUALITY];
-                    printf("Cross-junc n=%d | contaminlink=%d purelink=%d | contaminconc=%.4f pureconc=%.4f mg/L\n",
-                        n, cj->contaminlink, cj->purelink,
-                        cj->contaminconc / ucf, cj->pureconc / ucf);
-                    printf("  adjoutlink=%d oppoutlink=%d\n", cj->adjoutlink, cj->oppoutlink);
-                    printf("  IMX_adj=%.4f IMX_opp=%.4f mg/L\n",
-                        imxadjoutconc(pr, cj) / ucf, imxoppoutconc(pr, cj) / ucf);
-                    printf("  NodeQual[upnode_contam]=%.4f NodeQual[upnode_pur]=%.4f mg/L\n",
-                        qual->NodeQual[net->Link[cj->contaminlink].N1] / ucf,
-                        qual->NodeQual[net->Link[cj->purelink].N1] / ucf);
+                    FILE *dbg2 = fopen("C:\\Temp\\epanet_crossjunc.log", "a");
+                    if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
+                    {
+                        Cjunc *cj = &qual->Crossjuncs[n];
+                        double ucf = pr->Ucf[QUALITY];
+                        if (dbg2)
+                        {
+                            fprintf(dbg2, "n=%d ISCROSS=1 contaminlink=%d purelink=%d adjout=%d oppout=%d contaminconc=%.4f pureconc=%.4f IMXadj=%.4f IMXopp=%.4f\n",
+                                n, cj->contaminlink, cj->purelink, cj->adjoutlink, cj->oppoutlink,
+                                cj->contaminconc / ucf, cj->pureconc / ucf,
+                                imxadjoutconc(pr, cj) / ucf, imxoppoutconc(pr, cj) / ucf);
+                        }
+                    }
+                    else if (n == 1)  // adapte "1" si J1 n'a pas l'index 1 dans ton réseau
+                    {
+                        if (dbg2) fprintf(dbg2, "n=%d ISCROSS=0 (pas detecte comme cross-junction)\n", n);
+                    }
+                    if (dbg2) fclose(dbg2);
                 }
+                // ... send flow at new node concen. into link
                 evalnodeoutflow(pr, k, outconc, tstep);
             }
         }

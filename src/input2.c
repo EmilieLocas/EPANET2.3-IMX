@@ -89,6 +89,8 @@ int netsize(Project *pr)
         if (tok[0] == '[')
         {
             newsect = findmatch(tok, SectTxt);
+            FILE *dbgsect = fopen("C:\\Temp\\epanet_sections.log", "a");
+            if (dbgsect) { fprintf(dbgsect, "Section trouvee: %s\n", (newsect >= 0 ? SectTxt[newsect] : "INCONNUE")); fflush(dbgsect); fclose(dbgsect); }
             if (newsect >= 0)
             {
                 sect = newsect;
@@ -223,6 +225,8 @@ int readdata(Project *pr)
         if (parser->Tok[0][0] == '[')
         {
             newsect = findmatch(parser->Tok[0], SectTxt);
+            FILE *dbgsect = fopen("C:\\Temp\\epanet_sections.log", "a");
+            if (dbgsect) { fprintf(dbgsect, "Section trouvee: %s\n", (newsect >= 0 ? SectTxt[newsect] : "INCONNUE")); fflush(dbgsect); fclose(dbgsect); }
             if (newsect >= 0)
             {
                 sect = newsect;
