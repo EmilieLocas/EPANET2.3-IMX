@@ -1,10 +1,10 @@
 /*
 ******************************************************************************
 Project:        OWA EPANET
-            Modified for incomplete mixing
+            Modified for incomplete mixing : Reza Yousefian's model
 Version:        2.3
 Module:         qualroute.c
-Description:    implements EPANET's water quality engine
+Description:    computes water quality transport over a single time step
 Authors:        see AUTHORS
             EPANET-BAM's authors : Siri Sahib Khalsa & Sandia National Laboratories
 Copyright:      see AUTHORS
@@ -87,6 +87,8 @@ void transport(Project *pr, long tstep)
         reacttanks(pr, tstep);
     }
 
+    // ... (re)detect cross-junctions before routing, since flow
+    //     directions may have changed
     cj_err = findcrossjuncs(pr);
     if (cj_err > 0) return;
 
@@ -129,17 +131,24 @@ void transport(Project *pr, long tstep)
         volout *= tstep;
 
         /* IMX start - derived from BAM */
+        // ... for cross-junctions, refresh the contaminant/pure inflow
+        //     concentrations from what was actually pushed into this
+        //     node's inlet links (accounts for incomplete mixing
+        //     upstream), then re-check which link is "contaminant" vs
+        //     "pure" now that concentrations may have changed
         if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
         {
             Cjunc *cj = &qual->Crossjuncs[n];
             int inlinks[2] = { cj->contaminlink, cj->purelink };
             double concs[2];
 
+            // ... get the quality leaving the upstream end of each inlet link
             for (int ii = 0; ii < 2; ii++)
             {
                 k = inlinks[ii];
-                /* LastSeg contient la concentration IMX poussée par evalnodeoutflow
-                du nœud amont — c'est la valeur correcte après mélange incomplet. */
+                // ... LastSeg holds the IMX concentration pushed by
+                //     evalnodeoutflow() at the upstream node - this is
+                //     the correct value after incomplete mixing
                 if (qual->LastSeg[k] != NULL)
                     concs[ii] = qual->LastSeg[k]->c;
                 else
@@ -153,6 +162,7 @@ void transport(Project *pr, long tstep)
             cj->contaminconc = concs[0];
             cj->pureconc     = concs[1];
 
+            // ... swap contaminant/pure roles if they've reversed
             assigncontaminationnode(pr, n);
         }
         /* IMX end - derived from BAM */
@@ -170,6 +180,9 @@ void transport(Project *pr, long tstep)
                 double outconc = nodequal;
 
                 /* IMX start - derived from BAM */
+                // ... for a cross-junction, override the fully-mixed node
+                //     quality with the incomplete-mixing concentration
+                //     appropriate to whichever outlet link this is
                 if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
                 {
                     Cjunc *cj = &qual->Crossjuncs[n];
@@ -190,23 +203,15 @@ void transport(Project *pr, long tstep)
 
 void  evalnodeinflow(Project *pr, int k, long tstep, double *volin,
                      double *massin)
-// Cumule masse et volume arrivant au noeud/jonction
 /*
 **--------------------------------------------------------------
-**   Input:   k = link index -> unique, integer-based identifier (from 1) 
-**   assigned to each link (pipe, pump, or valve)
-**            tstep = quality routing time step (time interval where software
-**                     computes/updates results)
-**   Output:  volin = flow volume entering a node/junction
-**            Flow volume : volume of a fluid that passes through a given surface 
-**            per unit of time ==>  Flowrate in article (l/s) **Careful : units
-**            massin = constituent mass entering a node/junction
-**            Dimensionless concentration ? ==> *Concentration = massin / volin ?
-**            **Pressure does not have a significant impact on mixing phenomenon
-**            **Output ==> dimensionless concentration or volin and massin ?
-**   Purpose: adds the contribution of a link's (pipe's) outflow volume
+**   Input:   k = link index
+**            tstep = quality routing time step
+**   Output:  volin = flow volume entering a node
+**            massin = constituent mass entering a node
+**   Purpose: adds the contribution of a link's outflow volume
 **            and constituent mass to the total inflow into its
-**            downstream node/junction over a time step.
+**            downstream node over a time step.
 **--------------------------------------------------------------
 */
 {
@@ -260,38 +265,60 @@ void  evalnodeinflow(Project *pr, int k, long tstep, double *volin,
 
 double findnodequal(Project *pr, int n, double volin,
                     double massin, double volout, long tstep)
+/*
+**--------------------------------------------------------------
+**   Input:   n = node index
+**            volin = flow volume entering node
+**            massin = mass entering node
+**            volout = flow volume leaving node
+**            tstep = length of current time step
+**   Output:  returns water quality in a node's outflow
+**   Purpose: computes a node's new quality from its inflow
+**            volume and mass, including any source contribution.
+**--------------------------------------------------------------
+*/
 {
     Network *net = &pr->network;
     Hydraul *hyd = &pr->hydraul;
     Quality *qual = &pr->quality;
 
-    // Junction : mélange complet
+    // Node is a junction - update its water quality
     if (net->Node[n].Type == JUNCTION)
     {
+        // ... dilute inflow with any external negative demand
         volin -= MIN(0.0, hyd->NodeDemand[n]) * tstep;
+
+        // ... new concen. is mass inflow / volume inflow
         if (volin > 0.0) qual->NodeQual[n] = massin / volin;
+
+        // ... if no inflow adjust quality for reaction in connecting pipes
         else if (qual->Reactflag) qual->NodeQual[n] = noflowqual(pr, n);
 
-        /* IMX : cross-junction — NodeQual[n] garde le mélange complet
-           (bilan de masse), evalnodeoutflow appliquera IMX par lien */
+        /* IMX start */
+        // ... for a cross-junction, keep NodeQual[n] as the fully-mixed
+        //     value; evalnodeoutflow() will apply the actual per-link
+        //     IMX concentration further downstream
         if (n <= net->Njuncs && qual->Crossjuncs[n].iscrossjunc == 1)
             return qual->NodeQual[n];
+        /* IMX end */
     }
 
-    // Tank
+    // Node is a tank - use its mixing model to update its quality
     else if (net->Node[n].Type == TANK)
     {
         qual->NodeQual[n] = mixtank(pr, n, volin, massin, volout);
     }
 
-    // Initialiser SourceQual avant toute source externe
+    // Add any external quality source onto node's concen.
     qual->SourceQual = 0.0;
 
-    // Traçage
+    // For source tracing analysis find tracer added at source node
     if (qual->Qualflag == TRACE)
     {
         if (n == qual->TraceNode)
         {
+            // ... quality added to network is difference between tracer
+            //     concentration (100 mg/L) and current node quality
             if (net->Node[n].Type == RESERVOIR) qual->SourceQual = 100.0;
             else qual->SourceQual = MAX(100.0 - qual->NodeQual[n], 0.0);
             qual->NodeQual[n] = 100.0;
@@ -299,10 +326,11 @@ double findnodequal(Project *pr, int n, double volin,
         return qual->NodeQual[n];
     }
 
-    // Source chimique externe
+    // Find quality contributed by any external chemical source
     qual->SourceQual = findsourcequal(pr, n, volout, tstep);
     if (qual->SourceQual == 0.0) return qual->NodeQual[n];
 
+    // Combine source quality with node quality
     switch (net->Node[n].Type)
     {
         case JUNCTION:
@@ -369,7 +397,6 @@ double  noflowqual(Project *pr, int n)
 
 
 void evalnodeoutflow(Project *pr, int k, double c, long tstep)
-// Renvoie la concentration calculée dans les tuyaux sortant (output)
 /*
 **--------------------------------------------------------------
 **   Input:   k = link index

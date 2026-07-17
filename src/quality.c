@@ -1,7 +1,7 @@
 /*
 ******************************************************************************
 Project:        OWA EPANET
-            Modified for incomplete mixing
+            Modified for incomplete mixing : Reza Yousefian's model
 Version:        2.3
 Module:         quality.c
 Description:    implements EPANET's water quality engine
@@ -717,6 +717,18 @@ int flowdirchanged(Project *pr)
 
 /* IMX start - derived from BAM */
 int findcrossjuncs(Project *pr)
+/*
+**--------------------------------------------------------------
+**   Input:   none
+**   Output:  returns an error code (always 0)
+**   Purpose: scans all junctions and identifies which ones are
+**            "cross-junctions" (4-way junctions with 2 inflow
+**            & 2 outflow pipes crossing at roughly 90 degrees),
+**            tagging each with its contaminant/pure inlet links
+**            and its adjacent/opposite outlet links so that
+**            incomplete mixing (IMX) can later be applied there.
+**--------------------------------------------------------------
+*/
 {
     Network *net = &pr->network;
     Hydraul *hyd = &pr->hydraul;
@@ -726,22 +738,22 @@ int findcrossjuncs(Project *pr)
     int Nupnode, Ndownnode;
     int inlink1, inlink2, outlink1, outlink2;
     int opplink1, opplink2;
-    int prevNcross;
 
-    prevNcross = qual->Ncrossjuncs;
     qual->Ncrossjuncs = 0;
 
+    // Examine each junction as a candidate cross-junction
     for (j = 1; j <= net->Njuncs; j++)
     {
         qual->Crossjuncs[j].iscrossjunc = 0;
 
-        /* IMX : si le noeud n'a pas de coordonnees valides, il ne peut pas
-           etre evalue comme cross-junction */
+        // ... skip nodes without valid coordinates, since a cross-junction
+        //     can't be evaluated without link geometry
         if (net->Node[j].X == MISSING || net->Node[j].Y == MISSING) continue;
 
         Nupnode = 0;
         Ndownnode = 0;
 
+        // ... classify each incident link as flowing in or out of node j
         for (k = 1; k <= net->Nlinks; k++)
         {
             if (net->Link[k].Len == 0.0) continue;
@@ -772,14 +784,20 @@ int findcrossjuncs(Project *pr)
             }
         }
 
+        // ... a cross-junction needs exactly 2 inflow & 2 outflow links
         if (Nupnode == 2 && Ndownnode == 2)
         {
+            // ... find which outflow/inflow link is opposite inlink1
             opplink1 = nonadjlink(pr, inlink1, inlink2, outlink1, outlink2, j);
 
+            // ... if opplink1 came back as inlink2, the 2 inflow links
+            //     aren't really opposite each other, so this isn't a
+            //     valid cross-junction
             if (opplink1 != inlink2)
             {
                 opplink2 = nonadjlink(pr, inlink2, inlink1, outlink1, outlink2, j);
 
+                // ... check that the 2 inflow links cross at roughly 90 deg
                 double a_in1 = getlinkangle(pr, inlink1, j);
                 double a_in2 = getlinkangle(pr, inlink2, j);
                 double crossAngle = fabs(a_in2 - a_in1);
@@ -789,6 +807,8 @@ int findcrossjuncs(Project *pr)
 
                 if (fabs(crossAngle - M_PI / 2.0) > TOL) continue;
 
+                // ... the "contaminant" link (cl) is the inflow link paired
+                //     with the larger combined flow; the other is "pure" (pl)
                 int cl = inlink1, pl = inlink2;
                 if ((fabs(hyd->LinkFlow[inlink2]) + fabs(hyd->LinkFlow[opplink2])) >
                     (fabs(hyd->LinkFlow[inlink1]) + fabs(hyd->LinkFlow[opplink1])))
@@ -797,6 +817,8 @@ int findcrossjuncs(Project *pr)
                     pl = inlink1;
                 }
 
+                // ... find which outlet link is closest to being opposite cl
+                //     (that one is the "opposite" outlet, the other "adjacent")
                 double a_cl      = getlinkangle(pr, cl, j);
                 double diff_out1 = fabs(fmod(fabs(getlinkangle(pr, outlink1, j) - a_cl), 2.0*M_PI) - M_PI);
                 double diff_out2 = fabs(fmod(fabs(getlinkangle(pr, outlink2, j) - a_cl), 2.0*M_PI) - M_PI);
@@ -804,6 +826,7 @@ int findcrossjuncs(Project *pr)
                 int opp_out = (diff_out1 < diff_out2) ? outlink1 : outlink2;
                 int adj_out = (diff_out1 < diff_out2) ? outlink2 : outlink1;
 
+                // ... record this node as a cross-junction
                 qual->Ncrossjuncs++;
                 qual->Crossjuncs[j].iscrossjunc  = 1;
                 qual->Crossjuncs[j].nodeindex    = j;
@@ -818,9 +841,25 @@ int findcrossjuncs(Project *pr)
 }
 
 double imxadjoutconc(Project *pr, Cjunc *cj)
+/*
+**--------------------------------------------------------------
+**   Input:   cj = pointer to a cross-junction record, with
+**            contaminant/pure inflow links & concentrations and
+**            adjacent/opposite outflow links already assigned
+**   Output:  returns the incomplete-mixing (IMX) concentration
+**            leaving the cross-junction through its "adjacent"
+**            outlet link (the outlet on the same side as the
+**            dominant, or contaminant, inflow)
+**   Purpose: applies the empirical IMX correlation to determine
+**            how much of the contaminant inflow, versus the pure
+**            inflow, ends up in the adjacent outlet link, instead
+**            of assuming complete mixing at the junction.
+**--------------------------------------------------------------
+*/
 {
     Hydraul *hyd = &pr->hydraul;
 
+    // ... get inflow/outflow rates and inflow concentrations
     double Q1 = fabs(hyd->LinkFlow[cj->contaminlink]);
     double Q2 = fabs(hyd->LinkFlow[cj->purelink]);
     double Q3 = fabs(hyd->LinkFlow[cj->adjoutlink]);
@@ -828,22 +867,24 @@ double imxadjoutconc(Project *pr, Cjunc *cj)
     double Cpur  = cj->pureconc;
     double ratio = Q3 / Q1;
 
+    // ... no need for IMX if both inflows already have the same quality
     if (fabs(Ccont - Cpur) < 1e-10) return Ccont;
 
+    // ... empirical correlation for the fraction of contaminant inflow
+    //     that ends up in the adjacent outlet link
     double C3_star;
     if (ratio <= 0.85)
         C3_star = 1.0;
     else
         C3_star = 0.22 * log(ratio) + 0.91 * pow(Q3/Q2, -0.79);
 
-    /* IMX : borner C3* entre 0 et 1 pour éviter concentrations
-       hors bornes physiques */
+    // ... bound C3* between 0 and 1 to avoid unphysical concentrations
     if (C3_star < 0.0) C3_star = 0.0;
     if (C3_star > 1.0) C3_star = 1.0;
 
     double result = C3_star * (Ccont - Cpur) + Cpur;
 
-    /* Clamp final entre Cpur et Ccont */
+    // ... final clamp between the pure and contaminant concentrations
     if (result < Cpur)  result = Cpur;
     if (result > Ccont) result = Ccont;
 
@@ -851,9 +892,24 @@ double imxadjoutconc(Project *pr, Cjunc *cj)
 }
 
 double imxoppoutconc(Project *pr, Cjunc *cj)
+/*
+**--------------------------------------------------------------
+**   Input:   cj = pointer to a cross-junction record, with
+**            contaminant/pure inflow links & concentrations and
+**            adjacent/opposite outflow links already assigned
+**   Output:  returns the incomplete-mixing (IMX) concentration
+**            leaving the cross-junction through its "opposite"
+**            outlet link
+**   Purpose: completes the cross-junction mass balance by
+**            computing the concentration in the opposite outlet
+**            link once the adjacent outlet's IMX concentration
+**            (from imxadjoutconc) is known.
+**--------------------------------------------------------------
+*/
 {
-        Hydraul *hyd = &pr->hydraul;
+    Hydraul *hyd = &pr->hydraul;
 
+    // ... get inflow/outflow rates and inflow concentrations
     double Q1 = fabs(hyd->LinkFlow[cj->contaminlink]);
     double Q2 = fabs(hyd->LinkFlow[cj->purelink]);
     double Q3 = fabs(hyd->LinkFlow[cj->adjoutlink]);
@@ -861,16 +917,17 @@ double imxoppoutconc(Project *pr, Cjunc *cj)
     double Ccont = cj->contaminconc;
     double Cpur  = cj->pureconc;
 
+    // ... no IMX needed if inflows already match, or nothing exits here
     if (fabs(Ccont - Cpur) < 1e-10) return Ccont;
     if (Q4 < 1e-10) return Cpur;
 
+    // ... get the adjacent outlet's IMX concentration first
     double C3 = imxadjoutconc(pr, cj);
 
-    /* Bilan de masse : C4 = (C1*Q1 + C2*Q2 - C3*Q3) / Q4 */
+    // ... mass balance: C4 = (C1*Q1 + C2*Q2 - C3*Q3) / Q4
     double result = (Ccont * Q1 + Cpur * Q2 - C3 * Q3) / Q4;
 
-    /* Clamp physique : la concentration ne peut pas sortir
-       de l'intervalle [Cpur, Ccont] */
+    // ... physical clamp: concentration can't fall outside [Cpur, Ccont]
     if (result < Cpur)  result = Cpur;
     if (result > Ccont) result = Ccont;
 
@@ -878,6 +935,18 @@ double imxoppoutconc(Project *pr, Cjunc *cj)
 }
 
 double angle(double x1, double y1, double x2, double y2)
+/*
+**--------------------------------------------------------------
+**   Input:   (x1,y1) = coordinates of a link's end point
+**            (x2,y2) = coordinates of the junction node
+**   Output:  returns the angle (in radians, 0 to 2*PI) of the
+**            line from the node to the link's end point,
+**            measured counter-clockwise from the positive x-axis
+**   Purpose: computes the compass-style angle a link makes with
+**            a node, used to determine how links are arranged
+**            around a cross-junction.
+**--------------------------------------------------------------
+*/
 {
     double relptx = x1 - x2;
     double relpty = y1 - y2;
@@ -891,11 +960,25 @@ double angle(double x1, double y1, double x2, double y2)
 }
 
 void getlinkcoords(Project *pr, int lnk, int node, double *x, double *y)
+/*
+**--------------------------------------------------------------
+**   Input:   lnk = link index
+**            node = index of the node at one end of the link
+**   Output:  x, y = coordinates of the link's vertex (or, if
+**            none exists, of the link's opposite end node)
+**            nearest to "node"
+**   Purpose: retrieves the coordinates used to establish the
+**            direction a link leaves a given node, accounting
+**            for digitized vertices along the link if present.
+**--------------------------------------------------------------
+*/
 {
     Network *net = &pr->network;
     Slink *link = &net->Link[lnk];
     Pvertices verts = link->Vertices;
     
+    // ... if the link has digitized vertices, use whichever end vertex
+    //     is nearest to "node"
     if (verts != NULL && verts->Npts > 0)
     {
         if (link->N1 == node) 
@@ -909,6 +992,8 @@ void getlinkcoords(Project *pr, int lnk, int node, double *x, double *y)
             *y = verts->Y[verts->Npts-1]; 
         }
     }
+
+    // ... otherwise fall back on the coordinates of the link's other node
     else
     {
         int other = (link->N1 == node) ? link->N2 : link->N1;
@@ -918,20 +1003,40 @@ void getlinkcoords(Project *pr, int lnk, int node, double *x, double *y)
 }
 
 int nonadjlink(Project *pr, int tolnk, int lnk2, int lnk3, int lnk4, int node)
+/*
+**--------------------------------------------------------------
+**   Input:   tolnk = reference link index
+**            lnk2, lnk3, lnk4 = the three other links incident
+**            on the node, to be compared against tolnk
+**            node = shared node index
+**   Output:  returns the index of whichever of lnk2, lnk3, lnk4
+**            lies angularly opposite (i.e., is not adjacent) to
+**            tolnk around the node
+**   Purpose: identifies, among the links crossing at a
+**            4-way junction, which one is not adjacent to a
+**            given reference link, so that inflow/outflow link
+**            pairs can be matched up correctly.
+**--------------------------------------------------------------
+*/
 {
+    // ... get each link's angle relative to the node
     double a1 = getlinkangle(pr, tolnk, node);
     double a2 = getlinkangle(pr, lnk2,  node);
     double a3 = getlinkangle(pr, lnk3,  node);
     double a4 = getlinkangle(pr, lnk4,  node);
 
+    // ... re-express angles relative to tolnk
     a2 -= a1;
     a3 -= a1;
     a4 -= a1;
 
+    // ... normalize to the range [0, 2*PI)
     if (a2 < 0.0) a2 += (2.0 * M_PI);
     if (a3 < 0.0) a3 += (2.0 * M_PI);
     if (a4 < 0.0) a4 += (2.0 * M_PI);
 
+    // ... the link that is not "between" the other two (angularly) is
+    //     the one opposite tolnk
     if (((a2 >= a3) && (a2 <= a4)) || ((a2 <= a3) && (a2 >= a4))) return lnk2;
     if (((a3 >= a2) && (a3 <= a4)) || ((a3 <= a2) && (a3 >= a4))) return lnk3;
     if (((a4 >= a2) && (a4 <= a3)) || ((a4 <= a2) && (a4 >= a3))) return lnk4;
@@ -939,6 +1044,17 @@ int nonadjlink(Project *pr, int tolnk, int lnk2, int lnk3, int lnk4, int node)
 }
 
 double getlinkangle(Project *pr, int lnk, int node)
+/*
+**--------------------------------------------------------------
+**   Input:   lnk = link index
+**            node = index of the node at one end of the link
+**   Output:  returns the angle (in radians) that link lnk makes
+**            as it leaves node
+**   Purpose: combines getlinkcoords() and angle() to give the
+**            orientation of a link relative to one of its
+**            end nodes.
+**--------------------------------------------------------------
+*/
 {
     double x, y;
     getlinkcoords(pr, lnk, node, &x, &y);
@@ -946,14 +1062,32 @@ double getlinkangle(Project *pr, int lnk, int node)
 }
 
 void assigncontaminationnode(Project *pr, int n)
+/*
+**--------------------------------------------------------------
+**   Input:   n = node index of a cross-junction, whose
+**            contaminlink/purelink concentrations have just
+**            been refreshed by transport()
+**   Output:  none
+**   Purpose: makes sure the link carrying the higher
+**            concentration is always labeled "contaminlink" and
+**            the lower one "purelink" (swapping them, along with
+**            their matching adjacent/opposite outlet links, if
+**            the roles have reversed since the last time step)
+**            so that the IMX formulas are applied consistently.
+**--------------------------------------------------------------
+*/
 {
     Quality *qual = &pr->quality;
     Cjunc *cj = &qual->Crossjuncs[n];
 
+    // ... nothing to do if this node isn't a cross-junction
     if (!cj->iscrossjunc) return;
 
+    // ... if the "pure" link is now more concentrated than the
+    //     "contaminant" link, their roles have swapped
     if (cj->pureconc > cj->contaminconc)
     {
+        // ... swap the inflow link indices and their concentrations
         int tmplink      = cj->contaminlink;
         cj->contaminlink = cj->purelink;
         cj->purelink     = tmplink;
@@ -961,6 +1095,9 @@ void assigncontaminationnode(Project *pr, int n)
         cj->contaminconc = cj->pureconc;
         cj->pureconc     = tmpc;
 
+        // ... re-check which outlet link is closest to the new
+        //     contaminant inflow, and relabel adjacent/opposite
+        //     outlets accordingly
         int oldadj = cj->adjoutlink;
         int oldopp = cj->oppoutlink;
         double a_contam = getlinkangle(pr, cj->contaminlink, n);
