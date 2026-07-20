@@ -1,9 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"C:/Users/emili/Desktop/Ecole/INRS/EPANET/build32/cmake_install.cmake",
-		"C:/Users/emili/Desktop/Ecole/INRS/EPANET/build32/run/cmake_install.cmake",
-		"C:/Users/emili/Desktop/Ecole/INRS/EPANET/build32/src/outfile/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

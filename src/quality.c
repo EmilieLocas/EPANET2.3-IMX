@@ -876,7 +876,7 @@ double imxadjoutconc(Project *pr, Cjunc *cj)
     if (ratio <= 0.85)
         C3_star = 1.0;
     else
-        C3_star = 0.22 * log(ratio) + 0.91 * pow(Q3/Q2, -0.79);
+        C3_star = 0.021927 * log(ratio) + 0.86603 * pow(Q3/Q2, -0.876357);
 
     // ... bound C3* between 0 and 1 to avoid unphysical concentrations
     if (C3_star < 0.0) C3_star = 0.0;
