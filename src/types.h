@@ -405,23 +405,19 @@ typedef struct             // Node Object
   char     *Tag;           // optional category tag                                                   
 } Snode;
 
-/* BAM start */
+/* IMX start- derived from BAM */
 typedef struct
 {
   int nodeindex; // Index of cross-junction in Node array
   int iscrossjunc; // Whether node is a cross-junction
-
-  /* IMX start*/
   int contaminlink; // Contaminated inlet link index
   int purelink; // Pure inlet link index
   int adjoutlink; // Adjacent outlet link index (to contaminated inlet)
   int oppoutlink; // Opposite outlet link index (to contaminated inlet)
-
   double contaminconc; // Concentration of contaminated inlet flow
   double pureconc; // Concentration of pure inlet flow
-  /* IMX end*/
 } Cjunc;
-/* BAM end */
+/* IMX end - derived from BAM */
 
 typedef struct             // Link Object
 {

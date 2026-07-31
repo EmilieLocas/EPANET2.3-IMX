@@ -873,10 +873,10 @@ double imxadjoutconc(Project *pr, Cjunc *cj)
     // ... empirical correlation for the fraction of contaminant inflow
     //     that ends up in the adjacent outlet link
     double C3_star;
-    if (ratio <= 0.8333333333)
+    if (ratio <= 0.85)
         C3_star = 1.0;
     else
-        C3_star = 0.021927 * log(Q3/Q2) + 0.86603 * pow(ratio, -0.876357);
+        C3_star = 0.022 * log(Q3/Q2) + 0.91 * pow(ratio, -0.79);
 
     // ... bound C3* between 0 and 1 to avoid unphysical concentrations
     if (C3_star < 0.0) C3_star = 0.0;
