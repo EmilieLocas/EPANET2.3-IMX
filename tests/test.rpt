@@ -1,4 +1,4 @@
-  Page 1                                    Mon Jun 29 21:43:34 2026
+  Page 1                                    Thu Aug 13 20:33:52 2026
 
   ******************************************************************
   *                           E P A N E T                          *
@@ -7,35 +7,54 @@
   *                          Version 2.3.05                        *
   ******************************************************************
   
-  Test 2 cross-junctions en serie - IMX - Debits egaux (100 L/s)
-   
-      Input Data File ................... test_2crossjuncs.inp
-      Number of Junctions................ 5
-      Number of Reservoirs............... 3
-      Number of Tanks ................... 0
-      Number of Pipes ................... 7
-      Number of Pumps ................... 0
-      Number of Valves .................. 0
-      Headloss Formula .................. Hazen-Williams
-      Nodal Demand Model ................ DDA
-      Hydraulic Timestep ................ 15.00 min
-      Hydraulic Accuracy ................ 0.001000
-      Status Check Frequency ............ 2
-      Maximum Trials Checked ............ 10
-      Damping Limit Threshold ........... 0.000000
-      Maximum Trials .................... 200
-      Quality Analysis .................. Chemical
-      Water Quality Time Step ........... 5.00 min
-      Water Quality Tolerance ........... 0.01 mg/L
-      Specific Gravity .................. 1.00
-      Relative Kinematic Viscosity ...... 1.00
-      Relative Chemical Diffusivity ..... 1.00
-      Demand Multiplier ................. 1.00
-      Total Duration .................... 480.00 min
-      Reporting Criteria:
-         No Nodes
-         No Links
-   
-  Analysis begun Mon Jun 29 21:43:34 2026
+  Analysis begun Thu Aug 13 20:33:52 2026
 
-  Analysis ended Mon Jun 29 21:43:37 2026
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 0:15:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 0:15:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 0:15:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 0:15:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 0:15:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 0:15:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 0:30:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 0:30:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 0:30:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 0:30:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 0:30:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 0:30:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 0:45:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 0:45:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 0:45:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 0:45:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 0:45:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 0:45:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:00:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:00:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:00:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:00:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:00:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:00:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:15:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:15:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:15:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:15:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:15:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:15:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:30:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:30:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:30:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:30:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:30:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:30:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:45:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:45:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:45:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:45:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 1:45:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 1:45:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 2:00:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 2:00:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 2:00:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 2:00:00 hrs.
+  WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction J1 at 2:00:00 hrs.
+  WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction J1 at 2:00:00 hrs.
+  Analysis ended Thu Aug 13 20:33:53 2026

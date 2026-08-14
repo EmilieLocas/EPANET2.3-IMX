@@ -504,5 +504,9 @@
 #define WARN4 "WARNING: Pumps cannot deliver enough flow or head."
 #define WARN5 "WARNING: Valves cannot deliver enough flow."
 #define WARN6 "WARNING: System has negative pressures."
+#define WARN_IMX_FLOW \
+"WARNING: IMX flow rate outside valid range (0.5-80 L/s) at cross-junction %s at %s hrs."
+#define WARN_IMX_RATIO \
+"WARNING: IMX flow ratio outside valid range (0.5-40) at cross-junction %s at %s hrs."
 
 #endif

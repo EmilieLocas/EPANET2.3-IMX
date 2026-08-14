@@ -1,0 +1,116 @@
+[TITLE]
+Test de declenchement des avertissements IMX (debits et ratios hors bornes)
+Cross-junction J1 : entrees W/S tres contrastees (400mm vs 10mm), sorties N/E idem
+
+[JUNCTIONS]
+;ID              Elev        Demand      Pattern
+ J1               0               0
+
+[RESERVOIRS]
+;ID              Head        Pattern
+ R_W             100
+ R_S             100
+ R_N               0
+ R_E               0
+
+[PIPES]
+;ID              Node1           Node2           Length      Diameter    Roughness   MinorLoss   Status
+ P_W              R_W             J1              500         400         130         0           Open
+ P_S              R_S             J1              500         10          130         0           Open
+ P_N              J1              R_N             500         10          130         0           Open
+ P_E              J1              R_E             500         400         130         0           Open
+
+[PUMPS]
+
+[VALVES]
+
+[TAGS]
+
+[DEMANDS]
+
+[STATUS]
+
+[PATTERNS]
+
+[CURVES]
+
+[CONTROLS]
+
+[RULES]
+
+[ENERGY]
+ Global Efficiency  	75
+ Global Price       	0
+ Demand Charge      	0
+
+[EMITTERS]
+
+[QUALITY]
+;Node            InitQual
+ J1               0
+ R_W              0
+ R_S              0
+ R_N              0
+ R_E              0
+
+[SOURCES]
+
+[REACTIONS]
+ Order Bulk            1
+ Order Tank            1
+ Order Wall            1
+ Global Bulk           0
+ Global Wall           0
+
+[MIXING]
+
+[TIMES]
+ Duration           	2:00
+ Hydraulic Timestep 	1:00
+ Quality Timestep   	0:05
+ Pattern Timestep   	1:00
+ Pattern Start      	0:00
+ Report Timestep    	0:15
+ Report Start       	0:00
+ Start ClockTime    	12 am
+ Statistic           	None
+
+[REPORT]
+ Status             	No
+ Summary            	No
+ Messages           	Yes
+ Page               	0
+
+[OPTIONS]
+ Units              	LPS
+ Headloss           	H-W
+ Specific Gravity   	1
+ Viscosity          	1
+ Trials             	40
+ Accuracy           	0.001
+ CHECKFREQ          	2
+ MAXCHECK           	10
+ DAMPLIMIT          	0
+ Unbalanced         	Continue 10
+ Pattern            	1
+ Demand Multiplier  	1.0
+ Emitter Exponent   	0.5
+ Quality            	Age
+ Diffusivity        	1
+ Tolerance          	0.01
+
+[COORDINATES]
+;Node            X-Coord         Y-Coord
+ J1               0               0
+ R_W              -1000           5
+ R_S              5               -1000
+ R_N              5               1000
+ R_E              1000            5
+
+[VERTICES]
+
+[LABELS]
+
+[BACKDROP]
+
+[END]

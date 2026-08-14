@@ -27,9 +27,18 @@ Last Updated:   15/07/2026
 #include "mempool.h"
 #include "types.h"
 #include "funcs.h"
+#include "text.h"
 
 // Stagnant flow tolerance
 const double Q_STAGNANT = 0.005 / GPMperCFS;
+
+/* IMX start */
+// Validity thresholds of the IMX model
+#define Q_IMX_MIN_LPS   0.5
+#define Q_IMX_MAX_LPS   80.0
+#define RATIO_IMX_MIN   0.5
+#define RATIO_IMX_MAX   40.0
+/* IMX end */
 
 // Exported functions
 double  findsourcequal(Project *, int, double, long);
@@ -37,6 +46,7 @@ double  findsourcequal(Project *, int, double, long);
 int     findcrossjuncs(Project *pr);
 double  imxadjoutconc(Project *pr, Cjunc *cj);
 double  imxoppoutconc(Project *pr, Cjunc *cj);
+void    checkimxflowwarnings(Project *pr, Cjunc *cj);
 double  getlinkangle(Project *pr, int lnk, int node);
 void    assigncontaminationnode(Project *pr, int n);
 /* IMX end - derived from BAM */
@@ -805,6 +815,8 @@ int findcrossjuncs(Project *pr)
 
                 double TOL = 5.0 * M_PI / 180.0;
 
+                printf("DEBUG: node %d candidate cross-junc, crossAngle=%.2f deg\n",
+                       j, crossAngle * 180.0 / M_PI);
                 if (fabs(crossAngle - M_PI / 2.0) > TOL) continue;
 
                 // ... the "contaminant" link (cl) is the inflow link paired
@@ -933,6 +945,62 @@ double imxoppoutconc(Project *pr, Cjunc *cj)
 
     return result;
 }
+
+
+void checkimxflowwarnings(Project *pr, Cjunc *cj)
+/*
+**--------------------------------------------------------------
+**   Input:   Input: cj = pointer to a cross-junction record, 
+**            with its input/output links already assigned for 
+**            the current time step
+**   Output:  none
+**   Purpose: writes a warning to the report file if a flow rate
+**            or flow ratio at the cross-junction falls outside
+**            the empirical validity range of the IMX model.
+**--------------------------------------------------------------
+*/
+{
+    Network *net = &pr->network;
+    Hydraul *hyd = &pr->hydraul;
+    Report  *rpt = &pr->report;
+    Times   *time = &pr->times;
+
+    if (!rpt->Messageflag) return;
+
+    double Q1 = fabs(hyd->LinkFlow[cj->contaminlink]);
+    double Q2 = fabs(hyd->LinkFlow[cj->purelink]);
+    double Q3 = fabs(hyd->LinkFlow[cj->adjoutlink]);
+    double Q4 = fabs(hyd->LinkFlow[cj->oppoutlink]);
+
+    double Q1_lps = Q1 * LPSperCFS;
+    double Q2_lps = Q2 * LPSperCFS;
+    double Q3_lps = Q3 * LPSperCFS;
+    double Q4_lps = Q4 * LPSperCFS;
+
+    double ratio31 = (Q1 > 1.e-9) ? Q3 / Q1 : 0.0;
+    double ratio32 = (Q2 > 1.e-9) ? Q3 / Q2 : 0.0;
+
+    // ... warning about out-of-range flow rates [0.5, 80] LPS
+    if (Q1_lps < Q_IMX_MIN_LPS || Q1_lps > Q_IMX_MAX_LPS ||
+        Q2_lps < Q_IMX_MIN_LPS || Q2_lps > Q_IMX_MAX_LPS ||
+        Q3_lps < Q_IMX_MIN_LPS || Q3_lps > Q_IMX_MAX_LPS ||
+        Q4_lps < Q_IMX_MIN_LPS || Q4_lps > Q_IMX_MAX_LPS)
+    {
+        sprintf(pr->Msg, WARN_IMX_FLOW, net->Node[cj->nodeindex].ID,
+                clocktime(rpt->Atime, time->Htime));
+        writeline(pr, pr->Msg);
+    }
+
+    // ... warning about Q3/Q1 and Q3/Q2 ratios being out of range [0.5, 40]
+    if (ratio31 < RATIO_IMX_MIN || ratio31 > RATIO_IMX_MAX ||
+        ratio32 < RATIO_IMX_MIN || ratio32 > RATIO_IMX_MAX)
+    {
+        sprintf(pr->Msg, WARN_IMX_RATIO, net->Node[cj->nodeindex].ID,
+                clocktime(rpt->Atime, time->Htime));
+        writeline(pr, pr->Msg);
+    }
+}
+
 
 double angle(double x1, double y1, double x2, double y2)
 /*

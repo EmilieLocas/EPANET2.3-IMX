@@ -50,6 +50,7 @@ extern double getlinkangle(Project *pr, int lnk, int node);
 extern double  imxadjoutconc(Project *pr, Cjunc *cj);
 extern double  imxoppoutconc(Project *pr, Cjunc *cj);
 extern void    assigncontaminationnode(Project *pr, int n);
+extern void    checkimxflowwarnings(Project *pr, Cjunc *cj);
 /* IMX end - derived from BAM */
 
 // Local functions
@@ -164,6 +165,10 @@ void transport(Project *pr, long tstep)
 
             // ... swap contaminant/pure roles if they've reversed
             assigncontaminationnode(pr, n);
+
+            // ... indicates if the flow rates or ratios fall outside the range
+            // of validity of the IMX model for this time step
+            checkimxflowwarnings(pr, cj);
         }
         /* IMX end - derived from BAM */
 

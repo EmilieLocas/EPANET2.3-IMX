@@ -11,7 +11,7 @@ int main()
     errcode = EN_createproject(&p);
     if (errcode) { printf("Erreur création projet: %d\n", errcode); return 1; }
 
-    errcode = EN_open(p, "test_2crossjuncs.inp", "test.rpt", "test.bin");
+    errcode = EN_open(p, "imx_warning_test.inp", "test.rpt", "test.bin");
     if (errcode)
     {
         EN_geterror(errcode, errmsg, 256);
