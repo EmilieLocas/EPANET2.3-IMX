@@ -9,7 +9,7 @@ OWA-EPANET
 [![epanet2-win64](https://github.com/OpenWaterAnalytics/EPANET/actions/workflows/win64.yml/badge.svg)](https://github.com/OpenWaterAnalytics/EPANET/actions/workflows/win64.yml)
 
 ## EPANET-IMX
-Access the EPANET-IMX installation and compilation guide here: [Open Project Documentation](./EPANET-IMX_guide.pdf)
+Access the EPANET-IMX installation and compilation guide here: [EPANET-IMX Guide](./EPANET-IMX_guide.pdf)
 
 
 ## DESCRIPTION
